@@ -18,7 +18,12 @@
  */
 package org.apache.myfaces.webapp;
 
+import com.ibm.websphere.servlet.session.IBMSessionListener;
+
+import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.faces.context.ExceptionHandler;
 import javax.faces.context.ExternalContext;
 import javax.faces.context.FacesContext;
@@ -33,6 +38,7 @@ import javax.servlet.ServletRequestAttributeEvent;
 import javax.servlet.ServletRequestAttributeListener;
 import javax.servlet.ServletRequestEvent;
 import javax.servlet.ServletRequestListener;
+import javax.servlet.http.HttpSession;
 import javax.servlet.http.HttpSessionAttributeListener;
 import javax.servlet.http.HttpSessionBindingEvent;
 import javax.servlet.http.HttpSessionEvent;
@@ -60,7 +66,8 @@ import org.apache.myfaces.spi.ViewScopeProvider;
 public class ManagedBeanDestroyerListener implements 
         HttpSessionAttributeListener, HttpSessionListener,
         ServletContextListener, ServletContextAttributeListener,
-        ServletRequestListener, ServletRequestAttributeListener
+        ServletRequestListener, ServletRequestAttributeListener,
+        IBMSessionListener
 {
 
     /**
@@ -73,6 +80,8 @@ public class ManagedBeanDestroyerListener implements
     private ManagedBeanDestroyer _destroyer = null;
     
     private ViewScopeProvider _viewScopeHandler = null;
+
+    private ConcurrentHashMap<String, ArrayList<HttpSessionBindingEvent>> sessionMap = new ConcurrentHashMap<String, ArrayList<HttpSessionBindingEvent>>();
 
     /**
      * Sets the ManagedBeanDestroyer instance to use.
@@ -90,10 +99,54 @@ public class ManagedBeanDestroyerListener implements
     }
 
     /* Session related methods ***********************************************/
+
+    /** {@inheritDoc} */
+    @Override
+    public void sessionRemovedFromCache(String sessionId) 
+    {
+        synchronized (sessionMap) 
+        {
+            List<HttpSessionBindingEvent> sessionAttrs = sessionMap.remove(sessionId);
+            if (sessionAttrs != null) 
+            {
+                for (HttpSessionBindingEvent event : sessionAttrs) 
+                {
+                    attributeRemoved(event);
+                }
+            } 
+            else 
+            {
+            }
+        }
+    }
+
+    private void addEventToSessionMap(HttpSessionBindingEvent event) 
+    {
+        if (event.getName() != null && _destroyer.isManagedBean(event.getName())) 
+        {
+            synchronized (sessionMap) 
+            {
+                List<HttpSessionBindingEvent> sessionAttrs = sessionMap.get(event.getSession().getId());
+                if (sessionAttrs == null)
+                {
+                    ArrayList<HttpSessionBindingEvent> list = new ArrayList<HttpSessionBindingEvent>();
+                    list.add(event);
+                    sessionMap.put(event.getSession().getId(), list);
+                }
+                else 
+                {
+                    sessionAttrs.add(event);
+                }
+            }
+        }
+    }
     
     public void attributeAdded(HttpSessionBindingEvent event)
     {
-        // noop
+        if (_destroyer != null && _destroyer.isManagedBean(event.getName())) 
+        {
+            addEventToSessionMap(event);
+        }
     }
 
     public void attributeRemoved(HttpSessionBindingEvent event)

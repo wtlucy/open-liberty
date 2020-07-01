@@ -18,6 +18,8 @@
  */
 package org.apache.myfaces.webapp;
 
+import com.ibm.websphere.servlet.session.IBMSessionListener;
+
 import org.apache.myfaces.buildtools.maven2.plugin.builder.annotation.JSFWebConfigParam;
 import org.apache.myfaces.config.annotation.LifecycleProviderFactory;
 import org.apache.myfaces.shared.util.ClassUtils;
@@ -71,7 +73,7 @@ import java.util.logging.Logger;
 public class StartupServletContextListener implements ServletContextListener,
         HttpSessionAttributeListener, HttpSessionListener,
         ServletRequestListener, ServletRequestAttributeListener,
-        ServletContextAttributeListener
+        ServletContextAttributeListener, IBMSessionListener
 {
     static final String FACES_INIT_DONE = "org.apache.myfaces.webapp.StartupServletContextListener.FACES_INIT_DONE";
 
@@ -367,6 +369,12 @@ public class StartupServletContextListener implements ServletContextListener,
     public void sessionDestroyed(HttpSessionEvent event)
     {
         _detroyerListener.sessionDestroyed(event);
+    }
+
+    @Override
+    public void sessionRemovedFromCache(String sessionId)
+    {
+        _detroyerListener.sessionRemovedFromCache(sessionId);
     }
 
     /* Context related methods ***********************************************/
